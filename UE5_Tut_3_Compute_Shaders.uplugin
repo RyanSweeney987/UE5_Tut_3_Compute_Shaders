@@ -1,0 +1,23 @@
+﻿{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "1.0",
+	"FriendlyName": "UE5_Tut_3_Compute_Shaders",
+	"Description": "Base UE5 plugin used for the UE5 Tutorial 3 - Creating Compute Shaders",
+	"Category": "Other",
+	"CreatedBy": "Ryan Sweeney",
+	"CreatedByURL": "https://github.com/RyanSweeney987/UE5_Tut_3_Compute_Shaders",
+	"DocsURL": "",
+	"MarketplaceURL": "",
+	"CanContainContent": true,
+	"IsBetaVersion": false,
+	"IsExperimentalVersion": false,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "UE5_Tut_3_Compute_Shaders",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	]
+}
