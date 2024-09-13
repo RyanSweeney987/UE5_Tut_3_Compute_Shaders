@@ -1,5 +1,6 @@
 ﻿// Copyright Epic Games, Inc. All Rights Reserved.
 
+using System.IO;
 using UnrealBuildTool;
 
 public class UE5_Tut_3_Compute_Shaders : ModuleRules
@@ -11,6 +12,7 @@ public class UE5_Tut_3_Compute_Shaders : ModuleRules
 		PublicIncludePaths.AddRange(
 			new string[] {
 				// ... add public include paths required here ...
+				Path.Combine(GetModuleDirectory("Renderer"), "Private"),
 			}
 			);
 				
@@ -26,6 +28,8 @@ public class UE5_Tut_3_Compute_Shaders : ModuleRules
 			new string[]
 			{
 				"Core",
+				"Engine", 
+				"UE5ShaderUtils", 
 				// ... add other public dependencies that you statically link with here ...
 			}
 			);
@@ -38,6 +42,11 @@ public class UE5_Tut_3_Compute_Shaders : ModuleRules
 				"Engine",
 				"Slate",
 				"SlateCore",
+				"Projects",
+				"RHI",
+				"Renderer",
+				"RenderCore",
+				"UE5ShaderUtils" 
 				// ... add private dependencies that you statically link with here ...	
 			}
 			);
