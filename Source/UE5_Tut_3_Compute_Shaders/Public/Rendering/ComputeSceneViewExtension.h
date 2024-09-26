@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "SceneViewExtension.h"
+#include "RenderGraphUtils.h"
 #include "PostProcess/PostProcessing.h"
 
 /**
@@ -11,8 +12,12 @@
  */
 class UE5_TUT_3_COMPUTE_SHADERS_API FComputeSceneViewExtension : public FSceneViewExtensionBase
 {
+	FRHIGPUBufferReadback* Readback = nullptr;
+	TArray<uint32> ColourReplacementCounts;
+	
 public:
 	FComputeSceneViewExtension(const FAutoRegister& AutoRegister);
+	virtual ~FComputeSceneViewExtension() override;
 
 	virtual void SetupViewFamily(FSceneViewFamily& InViewFamily) override {};
 	virtual void SetupView(FSceneViewFamily& InViewFamily, FSceneView& InView) override {};

@@ -17,13 +17,7 @@
 		{
 			"Name": "UE5_Tut_3_Compute_Shaders",
 			"Type": "Runtime",
-			"LoadingPhase": "Default"
-		}
-	],
-	"Plugins": [
-		{
-			"Name": "UE5ShaderUtils",
-			"Enabled": true
+			"LoadingPhase": "PostConfigInit"
 		}
 	]
 }

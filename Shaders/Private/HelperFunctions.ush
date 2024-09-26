@@ -7,6 +7,14 @@
 // https://www.johndcook.com/blog/2009/08/24/algorithms-convert-color-grayscale/#:~:text=Three%20algorithms%20for%20converting%20color%20to%20grayscale&text=The%20lightness%20method%20averages%20the,G%20%2B%20B)%20%2F%203.
 
 
+static const float HelperEpsilon = 0.0001f;
+
+float3 GetUnlitSceneColour(const uint2 ScreenPosition)
+{
+	FScreenSpaceData ScreenSpaceData = GetScreenSpaceDataUint(ScreenPosition, false);
+	return ScreenSpaceData.GBuffer.BaseColor;
+}
+
 float3 RGBtoLinear(const float3 InColour)
 {
 	float3 LinearColour;
@@ -41,70 +49,69 @@ float3 RGBtoLinear(const float3 InColour)
 	return LinearColour;
 }
 
+// Found this to work with converting from RGB to HSL
+// https://stackoverflow.com/a/9493060/8204221
 float3 RGBtoHSL(float3 InColour)
 {
-	InColour = RGBtoLinear(InColour);
 	//Min. value of RGB
-	const float Min = min(InColour.r, min(InColour.g, InColour.b));    
+	const float Min = min3(InColour.r, InColour.g, InColour.b);    
 	//Max. value of RGB
-	const float Max = max(InColour.r, max(InColour.g, InColour.b));    
+	const float Max = max3(InColour.r, InColour.g, InColour.b);    
 	//Delta RGB value
 	const float Delta = Max - Min;            
 
-	const float L = (Max + Min) / 2;
+	const float L = (Max + Min) / 2.0;
 
-	float H = 0;
-	float S = 0;
+	float H = 0.0;
+	float S = 0.0;
 
-	//Chromatic data...
-	BRANCH
-	if (Delta > 0)                                     
+	// If delta is not grey, it has chroma
+	if (Delta > 0.0)                                     
 	{
-		if (L < 0.5)
+		S = L > 0.5 ? Delta / (2.0 - Max - Min) : Delta / (Max + Min);
+
+		if(Max == InColour.r)
 		{
-			S = Delta / (Max + Min);
+			H = (InColour.g - InColour.b) / Delta + (InColour.g < InColour.b ? 6.0 : 0.0);
 		}
-		else
+		else if(Max == InColour.g)
 		{
-			S = Delta / (2 - Max - Min);
+			H = (InColour.b - InColour.r) / Delta + 2.0;
+		}
+		else if(Max == InColour.b)
+		{
+			H = (InColour.r - InColour.g) / Delta + 4.0;
 		}
 
-		const float DeltaR = (((Max - InColour.r) / 6) + (Delta / 2)) / Delta;
-		const float DeltaG = (((Max - InColour.g) / 6) + (Delta / 2)) / Delta;
-		const float DeltaB = (((Max - InColour.b) / 6) + (Delta / 2)) / Delta;
-
-		FLATTEN
-		if(InColour.r == Max)
-		{
-			H = DeltaB - DeltaG;
-		}
-		else if(InColour.g == Max)
-		{
-			H = (1 / 3) + DeltaR - DeltaB;
-		}
-		else if(InColour.b == Max)
-		{
-			H = (2 / 3) + DeltaG - DeltaR;
-		}
-
-		if(H < 0)
-		{
-			H += 1;
-		}
-		
-		if(H > 1)
-		{
-			H -= 1;
-		}
+		H /= 6.0;
 	}
 
 	return float3(H, S, L);
 }
 
+// Found this to work with converting from HSL to RGB
+// https://stackoverflow.com/a/64090995/8204221
+float3 HSLtoRGB(float3 InColour)
+{
+	const float H = InColour.r * 360.0;
+	const float S = InColour.g;
+	const float L = InColour.b;
+
+	const float A = S * min(L, 1.0 - L);
+
+	const float KR = (0.0f + H / 30.0f) % 12;
+	const float KG = (8.0f + H / 30.0f) % 12;
+	const float KB = (4.0f + H / 30.0f) % 12;
+
+	const float R = L - A * max(min3(KR - 3.0f, 9.0 - KR, 1.0), -1.0f);
+	const float G = L - A * max(min3(KG - 3.0f, 9.0 - KG, 1.0), -1.0f);
+	const float B = L - A * max(min3(KB - 3.0f, 9.0 - KB, 1.0), -1.0f);
+
+	return float3(R, G, B);
+}
+
 float3 RGBtoXYZ(float3 InColour)
 {
-	// InColour = RGBtoLinear(InColour);
-
 	float R = InColour.r;
 	float G = InColour.g;
 	float B = InColour.b;
@@ -133,9 +140,9 @@ float3 RGBtoXYZ(float3 InColour)
 		B = B / 12.92;
 	}
 
-	R = R * 100;
-	G = G * 100;
-	B = B * 100;
+	R = R * 100.0;
+	G = G * 100.0;
+	B = B * 100.0;
 
 	const float X = R * 0.4124 + G * 0.3576 + B * 0.1805;
 	const float Y = R * 0.2126 + G * 0.7152 + B * 0.0722;
@@ -175,43 +182,43 @@ float3 XYZtoCIELab(float3 InXYZ)
 //Function returns CIE-H° value
 float CIELabtoHue(const float InA, const float InB)          
 {
-	float Bias = 0;
+	float Bias = 0.0;
+	
+	BRANCH
+	if (InA >= 0.0 && InB < HelperEpsilon)
+	{
+		return 0.0;
+	}
+	BRANCH
+	if (InA < 0.0 && InB < HelperEpsilon)
+	{
+		return 180.0;
+	}
+	BRANCH
+	if (InA < HelperEpsilon && InB > 0.0)
+	{
+		return 90.0;
+	}
+	BRANCH
+	if (InA < HelperEpsilon && InB < 0.0)
+	{
+		return 270.0;
+	}
 
-	BRANCH
-	if (InA >= 0 && InB == 0)
-	{
-		return 0;
-	}
-	BRANCH
-	if (InA < 0 && InB == 0)
-	{
-		return 180;
-	}
-	BRANCH
-	if (InA == 0 && InB > 0)
-	{
-		return 90;
-	}
-	BRANCH
-	if (InA == 0 && InB < 0)
-	{
-		return 270;
-	}
-
 	FLATTEN
-	if (InA > 0 && InB > 0)
+	if (InA > 0.0 && InB > 0.0)
 	{
-		Bias = 0;
+		Bias = 0.0;
 	}
 	FLATTEN
-	if (InA < 0)
+	if (InA < 0.0)
 	{
-		Bias = 180;
+		Bias = 180.0;
 	}
 	FLATTEN
-	if (InA > 0 && InB < 0)
+	if (InA > 0.0 && InB < 0.0)
 	{
-		Bias = 360;
+		Bias = 360.0;
 	}
 
 	return degrees(atan(InB / InA)) + Bias;
@@ -235,50 +242,50 @@ float DeltaE2000(float3 CIEA, float3 CIEB, float LWeight, float CWeight, float H
 
 	float xC1 = sqrt(CIEa1 * CIEa1 + CIEb1 * CIEb1);
 	float xC2 = sqrt(CIEa2 * CIEa2 + CIEb2 * CIEb2);
-	const float xCX = (xC1 + xC2) / 2;
-	const float xGX = 0.5 * (1 - sqrt(pow(xCX,7) / (pow(xCX, 7) + pow(25, 7))));
-	float xNN = (1 + xGX) * CIEa1;
+	const float xCX = (xC1 + xC2) / 2.0;
+	const float xGX = 0.5 * (1.0 - sqrt(pow(xCX,7.0) / (pow(xCX, 7.0) + pow(25.0, 7.0))));
+	float xNN = (1.0 + xGX) * CIEa1;
 	xC1 = sqrt(xNN * xNN + CIEb1 * CIEb1);
 	float xH1 = CIELabtoHue(xNN, CIEb1);
-	xNN = (1 + xGX) * CIEa2;
+	xNN = (1.0 + xGX) * CIEa2;
 	xC2 = sqrt(xNN * xNN + CIEb2 * CIEb2);
 	float xH2 = CIELabtoHue(xNN, CIEb2);
 	float xDL = CIEL2 - CIEL1;
 	float xDC = xC2 - xC1;
 
-	float xDH = 0;
-	
-	if ((xC1 * xC2) == 0)
+	float xDH = 0.0;
+
+	if (xC1 * xC2 < HelperEpsilon)
 	{
-		xDH = 0;
+		xDH = 0.0;
 	}
 	else
 	{
 		xNN = round(xH2 - xH1);
-		if (abs(xNN) <= 180)
+		if (abs(xNN) <= 180.0)
 		{
 			xDH = xH2 - xH1;
 		}
 		else
 		{
-			if (xNN > 180)
+			if (xNN > 180.0)
 			{
-				xDH = xH2 - xH1 - 360;
+				xDH = xH2 - xH1 - 360.0;
 			}
 			else
 			{
-				xDH = xH2 - xH1 + 360;
+				xDH = xH2 - xH1 + 360.0;
 			}
 		}
 	}
 
-	xDH = 2 * sqrt(xC1 * xC2) * sin(radians(xDH / 2));
-	float xLX = (CIEL1 + CIEL2) / 2;
-	float xCY = (xC1 + xC2) / 2;
+	xDH = 2.0 * sqrt(xC1 * xC2) * sin(radians(xDH / 2.0));
+	float xLX = (CIEL1 + CIEL2) / 2.0;
+	float xCY = (xC1 + xC2) / 2.0;
 
-	float xHX = 0;
+	float xHX = 0.0;
 	
-	if ((xC1 * xC2) == 0)
+	if (xC1 * xC2 < HelperEpsilon)
 	{
 		xHX = xH1 + xH2;
 	}
@@ -286,15 +293,15 @@ float DeltaE2000(float3 CIEA, float3 CIEB, float LWeight, float CWeight, float H
 	{
 		xNN = abs(round(xH1 - xH2));
 
-		if (xNN > 180)
+		if (xNN > 180.0)
 		{
-			if ((xH2 + xH1) < 360)
+			if ((xH2 + xH1) < 360.0)
 			{
-				xHX = xH1 + xH2 + 360;
+				xHX = xH1 + xH2 + 360.0;
 			}
 			else
 			{
-				xHX = xH1 + xH2 - 360;
+				xHX = xH1 + xH2 - 360.0;
 			}
 		}
 		else
@@ -302,23 +309,23 @@ float DeltaE2000(float3 CIEA, float3 CIEB, float LWeight, float CWeight, float H
 			xHX = xH1 + xH2;
 		}
 
-		xHX /= 2;
+		xHX /= 2.0;
 	}
-	const float xTX = 1 - 0.17 * cos(radians(xHX - 30)) + 0.24
-		* cos(radians(2 * xHX)) + 0.32
-		* cos(radians(3 * xHX + 6)) - 0.20
-		* cos(radians(4 * xHX - 63));
-	const float xPH = 30 * exp(-((xHX - 275) / 25) * ((xHX - 275) / 25));
-	const float xRC = 2 * sqrt(pow(xCY, 7) / (pow(xCY, 7) + pow(25, 7)));
-	const float xSL = 1 + ((0.015 * ((xLX - 50) * (xLX - 50)))
-		/ sqrt(20 + ((xLX - 50) * (xLX - 50))));
+	const float xTX = 1.0 - 0.17 * cos(radians(xHX - 30.0)) + 0.24
+		* cos(radians(2.0 * xHX)) + 0.32
+		* cos(radians(3.0 * xHX + 6.0)) - 0.20
+		* cos(radians(4.0 * xHX - 63.0));
+	const float xPH = 30.0 * exp(-((xHX - 275.0) / 25.0) * ((xHX - 275.0) / 25.0));
+	const float xRC = 2.0 * sqrt(pow(xCY, 7.0) / (pow(xCY, 7.0) + pow(25.0, 7.0)));
+	const float xSL = 1.0 + ((0.015 * ((xLX - 50.0) * (xLX - 50.0)))
+		/ sqrt(20.0 + ((xLX - 50.0) * (xLX - 50.0))));
 
-	const float xSC = 1 + 0.045 * xCY;
-	const float xSH = 1 + 0.015 * xCY * xTX;
-	const float xRT = -sin(radians(2 * xPH)) * xRC;
+	const float xSC = 1.0 + 0.045 * xCY;
+	const float xSH = 1.0 + 0.015 * xCY * xTX;
+	const float xRT = -sin(radians(2.0 * xPH)) * xRC;
 	xDL = xDL / (LWeight * xSL);
 	xDC = xDC / (CWeight * xSC);
 	xDH = xDH / (HWeight * xSH);
 
-	return sqrt(pow(xDL, 2) + pow(xDC, 2) + pow(xDH, 2) + xRT * xDC * xDH);
+	return sqrt(pow(xDL, 2.0) + pow(xDC, 2.0) + pow(xDH, 2.0) + xRT * xDC * xDH);
 }

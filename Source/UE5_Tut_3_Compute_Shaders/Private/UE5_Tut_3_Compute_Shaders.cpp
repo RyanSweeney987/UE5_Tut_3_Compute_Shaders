@@ -14,9 +14,9 @@ void FUE5_Tut_3_Compute_ShadersModule::StartupModule()
 	// Requires Projects
 	const FString PluginShaderDir = FPaths::Combine(IPluginManager::Get().FindPlugin(TEXT("UE5_Tut_3_Compute_Shaders"))->GetBaseDir(), TEXT("Shaders"));
 	// Requires RenderCore
-	if(!AllShaderSourceDirectoryMappings().Contains(TEXT("/Shaders")))
+	if(!AllShaderSourceDirectoryMappings().Contains(TEXT("/TutorialShaders")))
 	{
-		AddShaderSourceDirectoryMapping(TEXT("/Shaders"), PluginShaderDir);
+		AddShaderSourceDirectoryMapping(TEXT("/TutorialShaders"), PluginShaderDir);
 	}
 }
 

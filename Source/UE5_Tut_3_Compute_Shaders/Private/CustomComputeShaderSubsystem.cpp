@@ -1,18 +1,18 @@
 ﻿// Fill out your copyright notice in the Description page of Project Settings.
 
 
-#include "CustomComputeShaderSubsystem.h"
+#include "ComputeShaderSubsystem.h"
 
 #include "SceneViewExtension.h"
 
-void UCustomComputeShaderSubsystem::Initialize(FSubsystemCollectionBase& Collection)
+void UComputeShaderSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
 
-	CustomSceneViewExtension = FSceneViewExtensions::NewExtension<FCustomSceneViewExtension>();
+	CustomSceneViewExtension = FSceneViewExtensions::NewExtension<FComputeSceneViewExtension>();
 }
 
-void UCustomComputeShaderSubsystem::Deinitialize()
+void UComputeShaderSubsystem::Deinitialize()
 {
 	Super::Deinitialize();
 

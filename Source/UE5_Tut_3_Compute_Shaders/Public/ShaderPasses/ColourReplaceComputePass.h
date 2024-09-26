@@ -8,73 +8,85 @@
 #include "PostProcess/PostProcessInputs.h"
 #include "RenderPasses/ComputePassBase.h"
 
+namespace ColourReplaceCompute
+{
+	static constexpr int32 THREADS_X = 16;
+	static constexpr int32 THREADS_Y = 16;
+}
+
 struct FColourReplace
 {
-	FVector3f TargetColour;
-	float Tolerance;
-	FVector3f ReplacementColour;
+	FVector3f TargetColourLab;
+	float PerceptionThreshold;
+	FVector3f ReplacementColourHSL;
 };
 
 // This can be included in your FGlobalShader class
 // Handy to keep them separate as you can use the same Params for multiple shaders
-// BEGIN_SHADER_PARAMETER_STRUCT(FColourReplaceParams,)
-// 	// Texture type is same as set in shader 
-// 	SHADER_PARAMETER_RDG_TEXTURE(Texture2D, SceneColorTexture)
-// 	SHADER_PARAMETER_STRUCT_REF(FViewUniformShaderParameters, View)
-// 	SHADER_PARAMETER_STRUCT_INCLUDE(FSceneTextureShaderParameters, SceneTextures)
-//
-// 	// The different colours we want to replace
-// 	SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBufffer<FColourReplace>, ColourReplacementDataBuffer)
-//
-// 	// Only needed if we're outputting to a render target
-// 	RENDER_TARGET_BINDING_SLOTS()
-// END_SHADER_PARAMETER_STRUCT()
+BEGIN_SHADER_PARAMETER_STRUCT(FTutorialColourReplaceParams,)
+	SHADER_PARAMETER(int, ColourCount)
 
-// class FColourReplaceCS : public FGlobalShader
-// {
-// 	DECLARE_EXPORTED_SHADER_TYPE(FColourReplaceCS, Global, );
-// 	using FParameters = FColourReplaceParams;
-// 	SHADER_USE_PARAMETER_STRUCT(FColourReplaceCS, FGlobalShader);
-//
-// 	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
-// 	{
-// 		return IsFeatureLevelSupported(Parameters.Platform, ERHIFeatureLevel::SM5);
-// 	}
-// 	
-// 	static void ModifyCompilationEnvironment(const FGlobalShaderPermutationParameters& Parameters, FShaderCompilerEnvironment& OutEnvironment)
-// 	{
-// 		FGlobalShader::ModifyCompilationEnvironment(Parameters, OutEnvironment);
-//
-// 		// When changing this, you may need to change something in the shader for it to take effect
-// 		// A simple comment with a bit of gibberish seems to be enough
-// 		SET_SHADER_DEFINE(OutEnvironment, USE_UNLIT_SCENE_COLOUR, 0);
-// 	}
-// };
+	// The texture we're going to be reading from and writing to
+	SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D<float4>, SceneColorTexture)
 
-/**
- * Override for making it easier to pass in the required parameters
- * Can override the FRenderPassOutputParams to return more than just a texture reference
- *
- * Delete this struct if you don't have the UE5ShaderUtils plugin
- */
-struct UE5_TUT_3_COMPUTE_SHADERS_API FColourReplaceInputParams : public FComputePassInputParams
+	// Texture type is same as set in shader - for getting the unlit colour
+	SHADER_PARAMETER_STRUCT_REF(FViewUniformShaderParameters, View)
+	SHADER_PARAMETER_STRUCT_INCLUDE(FSceneTextureShaderParameters, SceneTextures)
+
+	// The different colours we want to replace
+	SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBufffer<FColourReplace>, ColourReplacementDataBuffer)
+
+	// How many pixels we've replaced
+	SHADER_PARAMETER_RDG_BUFFER_UAV(RWStructureBuffer<int>, ColourReplacementCount)
+
+	// For setting up the indirect dispatch
+	SHADER_PARAMETER_RDG_BUFFER_UAV(RWByteAddressBuffer, ExecuteIndirectBuffer)
+END_SHADER_PARAMETER_STRUCT()
+
+class FTutorialColourReplaceCS : public FGlobalShader
 {
-	const FIntPoint ThreadCount;
-	const FPostProcessingInputs& Inputs;
-	const FSceneView& View;
+	DECLARE_EXPORTED_SHADER_TYPE(FTutorialColourReplaceCS, Global, );
+	using FParameters = FTutorialColourReplaceParams;
+	SHADER_USE_PARAMETER_STRUCT(FTutorialColourReplaceCS, FGlobalShader);
+
+	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
+	{
+		return IsFeatureLevelSupported(Parameters.Platform, ERHIFeatureLevel::SM5);
+	}
 	
-	FColourReplaceInputParams(FRDGBuilder &InGraphBuilder, const FGlobalShaderMap *InGlobalShaderMap, FIntPoint InThreadCount, const FPostProcessingInputs& InInputs,  const FSceneView& InView)
-		: FComputePassInputParams(InGraphBuilder, InGlobalShaderMap), ThreadCount(InThreadCount), Inputs(InInputs), View(InView)
-	{}
+	static void ModifyCompilationEnvironment(const FGlobalShaderPermutationParameters& Parameters, FShaderCompilerEnvironment& OutEnvironment)
+	{
+		FGlobalShader::ModifyCompilationEnvironment(Parameters, OutEnvironment);
+
+		OutEnvironment.CompilerFlags.Add(CFLAG_AllowTypedUAVLoads);
+
+		// When changing these, you may need to change something in the shader for it to take effect
+		// A simple comment with a bit of gibberish seems to be enough
+		SET_SHADER_DEFINE(OutEnvironment, USE_UNLIT_SCENE_COLOUR, 0);
+		SET_SHADER_DEFINE(OutEnvironment, THREADS_X, ColourReplaceCompute::THREADS_X);
+		SET_SHADER_DEFINE(OutEnvironment, THREADS_Y, ColourReplaceCompute::THREADS_Y);
+	}
 };
 
-/**
- * 
- */
-class UE5_TUT_3_COMPUTE_SHADERS_API FColourReplaceComputePass : public FComputePassBase
+BEGIN_SHADER_PARAMETER_STRUCT(FTutorialIndirectComputeParams,)
+	SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D<float4>, SceneColorTexture)
+END_SHADER_PARAMETER_STRUCT()
+
+class FTutorialIndirectComputeCS : public FGlobalShader
 {
-public:
-	FColourReplaceComputePass() = default;
+	DECLARE_EXPORTED_SHADER_TYPE(FTutorialIndirectComputeCS, Global, );
+	using FParameters = FTutorialIndirectComputeParams;
+	SHADER_USE_PARAMETER_STRUCT(FTutorialIndirectComputeCS, FGlobalShader);
+
+	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
+	{
+		return IsFeatureLevelSupported(Parameters.Platform, ERHIFeatureLevel::SM5);
+	}
 	
-	virtual FComputePassOutputParams AddPass(FComputePassInputParams& InParams) override;
+	static void ModifyCompilationEnvironment(const FGlobalShaderPermutationParameters& Parameters, FShaderCompilerEnvironment& OutEnvironment)
+	{
+		FGlobalShader::ModifyCompilationEnvironment(Parameters, OutEnvironment);
+
+		OutEnvironment.CompilerFlags.Add(CFLAG_AllowTypedUAVLoads);
+	}
 };

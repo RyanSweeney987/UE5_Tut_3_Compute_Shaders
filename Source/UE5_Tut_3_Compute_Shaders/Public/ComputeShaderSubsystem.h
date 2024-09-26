@@ -5,13 +5,13 @@
 #include "CoreMinimal.h"
 #include "Subsystems/EngineSubsystem.h"
 #include "Rendering/ComputeSceneViewExtension.h"
-#include "CustomComputeShaderSubsystem.generated.h"
+#include "ComputeShaderSubsystem.generated.h"
 
 /**
  * 
  */
 UCLASS()
-class UE5_TUT_3_COMPUTE_SHADERS_API UCustomComputeShaderSubsystem : public UEngineSubsystem
+class UE5_TUT_3_COMPUTE_SHADERS_API UComputeShaderSubsystem : public UEngineSubsystem
 {
 	GENERATED_BODY()
 

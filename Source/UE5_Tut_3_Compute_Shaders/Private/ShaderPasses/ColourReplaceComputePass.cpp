@@ -3,10 +3,5 @@
 
 #include "ShaderPasses/ColourReplaceComputePass.h"
 
-
-FComputePassOutputParams FColourReplaceComputePass::AddPass(FComputePassInputParams& InParams)
-{
-
-	
-	return FComputePassOutputParams();
-}
+IMPLEMENT_SHADER_TYPE(, FTutorialColourReplaceCS, TEXT("/TutorialShaders/private/ComputeTutorialShader.usf"), TEXT("ColourChangeMaskCS"), SF_Compute);
+IMPLEMENT_SHADER_TYPE(, FTutorialIndirectComputeCS, TEXT("/TutorialShaders/private/ComputeTutorialShader.usf"), TEXT("IndirectDispatchCS"), SF_Compute);

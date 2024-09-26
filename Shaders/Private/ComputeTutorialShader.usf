@@ -1,0 +1,131 @@
+// Include this
+#include "/Engine/Private/Common.ush"
+// Or this, this is included in Common.ush
+// #include "/Engine/Public/Platform.ush"
+
+// These contain various functions and structs that may be useful - not a complete list
+// #include "/Engine/Generated/GeneratedUniformBuffers.ush" 
+#include "/Engine/Private/DeferredShadingCommon.ush"
+// #include "/Engine/Private/ColorUtils.ush"
+// #include "/Engine/Private/DistanceField/GlobalDistanceFieldShared.ush"
+// #include "/Engine/Private/Random.ush"
+// #include "/Engine/Private/SceneTexturesCommon.ush"
+// #include "/Engine/Private/SceneData.ush"
+// #include "/Engine/Private/Common.ush"
+// #include "/Engine/Private/DeferredShadingCommon.ush"
+// #include "/Engine/Private/ScreenPass.ush"
+// #include "/Engine/Private/SceneTexturesCommon.ush"
+// #include "/Engine/Private/SceneTextureParameters.ush"
+
+#include "HelperFunctions.ush"
+
+// For better colour matching need to use better colours spaces such as CIELAB
+// https://en.wikipedia.org/wiki/CIELAB_color_space
+
+// And use DeltaE to get the perceptual difference between colours
+// https://zschuessler.github.io/DeltaE/learn/
+
+// Colour math function psuedo code https://www.easyrgb.com/en/math.php
+
+struct FColourReplace
+{
+	float3 TargetColourLab;
+	float Tolerance;
+	float3 ReplacementColourHSL;
+};
+
+int ColourCount;
+
+// Read-write textures
+RWTexture2D<float4> SceneColorTexture;
+
+// Readonly buffers
+StructuredBuffer<FColourReplace> ColourReplacementDataBuffer;
+
+// Read-write buffers
+RWStructuredBuffer<uint> ColourReplacementCount;
+
+// Buffer used to store the indirect execution data
+RWByteAddressBuffer ExecuteIndirectBuffer;
+
+[numthreads(THREADS_X, THREADS_Y, 1)]
+void ColourChangeMaskCS(uint3 DispatchThreadID : SV_DispatchThreadID, uint3 GroupThreadID : SV_GroupThreadID)
+{
+	const float4 SceneColour = SceneColorTexture[DispatchThreadID.xy];
+	const float3 SceneColourHSL = RGBtoHSL(saturate(SceneColour.rgb));
+	
+	// Get the current scene colour lab value
+#if USE_UNLIT_SCENE_COLOUR
+	float3 SceneColourUnlit = GetUnlitSceneColour(DispatchThreadID.xy);
+	const float3 SceneColourLab = RGBtoLab(SceneColourUnlit.rgb);
+#else
+	const float3 SceneColourLab = RGBtoLab(SceneColour.rgb);
+#endif
+
+	bool bChanged = false;
+	float3 SceneColourOut = SceneColour.rgb;
+	// Iterate through the colours, if any are within the threshold, change the colour
+	// UNROLL If using a fixed number of colours, you can use this macro to unroll the loop
+	for(int i = 0; i < ColourCount; i++)
+	{
+		const FColourReplace ColourReplace = ColourReplacementDataBuffer[i];
+		const float DeltaE = DeltaE2000( ColourReplace.TargetColourLab, SceneColourLab, 1, 1, 1);
+
+		BRANCH
+		if(DeltaE < ColourReplace.Tolerance)
+		{
+			const float LerpAmount = saturate(DeltaE / ColourReplace.Tolerance);
+			
+			// Lerp between the scene colour and the replacement colour based on the perceptual similarity
+			SceneColourOut = HSLtoRGB(lerp(SceneColourHSL, ColourReplace.ReplacementColourHSL, 1.0 - LerpAmount));
+
+			// Atomic add to count how many times this colour has been replaced
+			InterlockedAdd(ColourReplacementCount[i], 1);
+
+			bChanged = true;
+			break;
+		}
+	}
+
+	// Set the colour back on the colour texture
+	BRANCH
+	if(bChanged)
+	{
+		SceneColorTexture[DispatchThreadID.xy] = saturate(float4(SceneColourOut, SceneColour.a));
+	}
+	
+	// This will set the values required for the indirect execution
+	// This if block will only run once on the very first compute thread
+	if(DispatchThreadID.x == 0 && DispatchThreadID.y == 0)
+	{
+		float2 SceneDimensions;
+		SceneColorTexture.GetDimensions(SceneDimensions.x, SceneDimensions.y);
+
+		// Calculate the number of groups required to cover the scene
+		// Divide by 16 as that's the number of threads in each group along the X and Y axis
+		const int GroupX = ceil(SceneDimensions.x / 16);
+		const int GroupY = ceil(SceneDimensions.y / 16);
+		
+		// Write the number of elements to the buffer
+		// Offset each value by 4 bytes - int
+		ExecuteIndirectBuffer.Store(4 * 0, GroupX);
+		ExecuteIndirectBuffer.Store(4 * 1, GroupY);
+		ExecuteIndirectBuffer.Store(4 * 2, 1);   
+	}
+}
+
+[numthreads(16, 16, 1)]
+void IndirectDispatchCS(uint3 DispatchThreadID : SV_DispatchThreadID, uint3 GroupThreadID : SV_GroupThreadID)
+{
+	// Convert scene colour to HSL
+	const float4 SceneColour = SceneColorTexture[DispatchThreadID.xy];
+	const float3 SceneColourHSL = RGBtoHSL(SceneColour.rgb);
+
+	// Any colours that are below the lightness threshold will be darkened to black
+	BRANCH
+	if(SceneColourHSL.z < 0.1)
+	{
+		const float GreyScale = 0.21 * SceneColour.r + 0.72 * SceneColour.g + 0.07 * SceneColour.b; 
+		SceneColorTexture[DispatchThreadID.xy] = float4(GreyScale.xxx, SceneColour.a);
+	} 
+}
