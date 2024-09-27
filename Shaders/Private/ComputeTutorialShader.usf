@@ -76,8 +76,12 @@ void ColourChangeMaskCS(uint3 DispatchThreadID : SV_DispatchThreadID, uint3 Grou
 		{
 			const float LerpAmount = saturate(DeltaE / ColourReplace.Tolerance);
 			
-			// Lerp between the scene colour and the replacement colour based on the perceptual similarity
-			SceneColourOut = HSLtoRGB(lerp(SceneColourHSL, ColourReplace.ReplacementColourHSL, 1.0 - LerpAmount));
+			// Lerp between the scene colour and the replacement colour based on the perceptual similarity - as in video
+			// SceneColourOut = HSLtoRGB(lerp(SceneColourHSL, ColourReplace.ReplacementColourHSL, 1.0 - LerpAmount));
+
+			// Improved colour change
+			const float HueLerp = lerp(SceneColourHSL.x, ColourReplace.ReplacementColourHSL.x, 1.0 - LerpAmount);
+			SceneColourOut = HSLtoRGB(float3(HueLerp, SceneColourHSL.y, SceneColourHSL.z));
 
 			// Atomic add to count how many times this colour has been replaced
 			InterlockedAdd(ColourReplacementCount[i], 1);

@@ -62,7 +62,7 @@ class FTutorialColourReplaceCS : public FGlobalShader
 
 		// When changing these, you may need to change something in the shader for it to take effect
 		// A simple comment with a bit of gibberish seems to be enough
-		SET_SHADER_DEFINE(OutEnvironment, USE_UNLIT_SCENE_COLOUR, 0);
+		SET_SHADER_DEFINE(OutEnvironment, USE_UNLIT_SCENE_COLOUR, 1);
 		SET_SHADER_DEFINE(OutEnvironment, THREADS_X, ColourReplaceCompute::THREADS_X);
 		SET_SHADER_DEFINE(OutEnvironment, THREADS_Y, ColourReplaceCompute::THREADS_Y);
 	}
